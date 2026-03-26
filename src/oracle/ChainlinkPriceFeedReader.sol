@@ -16,13 +16,7 @@ contract ChainlinkPriceFeedReader {
     }
 
     function read() external view returns (uint256 price, uint256 updatedAt) {
-        (
-            uint80 roundId,
-            int256 answer,
-            ,
-            uint256 timestamp,
-            uint80 answeredInRound
-        ) = FEED.latestRoundData();
+        (uint80 roundId, int256 answer,, uint256 timestamp, uint80 answeredInRound) = FEED.latestRoundData();
 
         if (answer <= 0) revert OracleInvalidPrice();
         if (timestamp == 0) revert OracleIncompleteRound();
@@ -34,13 +28,7 @@ contract ChainlinkPriceFeedReader {
     }
 
     function readNormalizedTo1e18() external view returns (uint256 price1e18, uint256 updatedAt) {
-        (
-            uint80 roundId,
-            int256 answer,
-            ,
-            uint256 timestamp,
-            uint80 answeredInRound
-        ) = FEED.latestRoundData();
+        (uint80 roundId, int256 answer,, uint256 timestamp, uint80 answeredInRound) = FEED.latestRoundData();
 
         if (answer <= 0) revert OracleInvalidPrice();
         if (timestamp == 0) revert OracleIncompleteRound();

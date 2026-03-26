@@ -5,21 +5,19 @@ import {ChainlinkPriceFeedReader} from "./ChainlinkPriceFeedReader.sol";
 import {OracleGuard} from "./OracleGuard.sol";
 
 contract OracleConsumer {
-
-    ChainlinkPriceFeedReader public immutable reader;
-    uint256 public immutable maxDelay;
+    ChainlinkPriceFeedReader public immutable READER;
+    uint256 public immutable MAX_DELAY;
 
     constructor(address readerAddress, uint256 maxDelay_) {
-        reader = ChainlinkPriceFeedReader(readerAddress);
-        maxDelay = maxDelay_;
+        READER = ChainlinkPriceFeedReader(readerAddress);
+        MAX_DELAY = maxDelay_;
     }
 
     function getSafePrice() external view returns (uint256) {
-        (uint256 price, uint256 updatedAt) = reader.readNormalizedTo1e18();
+        (uint256 price, uint256 updatedAt) = READER.readNormalizedTo1e18();
 
-        OracleGuard.validate(price, updatedAt, maxDelay);
+        OracleGuard.validate(price, updatedAt, MAX_DELAY);
 
         return price;
     }
-
 }

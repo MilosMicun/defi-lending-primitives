@@ -11,10 +11,9 @@ library OracleGuard {
 
         uint256 age = block.timestamp - updatedAt;
 
-        if(age > maxDelay){
+        if (age > maxDelay) {
             revert OracleStalePrice(updatedAt, block.timestamp, maxDelay);
         }
-
     }
 
     function deviationBps(uint256 oldPrice, uint256 newPrice) internal pure returns (uint256) {
@@ -24,14 +23,10 @@ library OracleGuard {
         return (diff * 10_000) / oldPrice;
     }
 
-    function validateDevotion(
-        uint256 oldPrice,
-        uint256 newPrice,
-        uint256 maxDevotionBps
-    ) internal pure {
+    function validateDevotion(uint256 oldPrice, uint256 newPrice, uint256 maxDeviationBps) internal pure {
         uint256 dev = deviationBps(oldPrice, newPrice);
 
-        if (dev > maxDeviationBps){
+        if (dev > maxDeviationBps) {
             revert OracleDeviationTooHigh(oldPrice, newPrice, dev, maxDeviationBps);
         }
     }
