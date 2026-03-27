@@ -15,7 +15,7 @@ contract ChainlinkPriceFeedReader {
         FEED_DECIMALS = FEED.decimals();
     }
 
-    function read() external view returns (uint256 price, uint256 updatedAt) {
+    function _fetchRaw() internal view returns (uint256 rawPrice, uint256 updatedAt) {
         (uint80 roundId, int256 answer,, uint256 timestamp, uint80 answeredInRound) = FEED.latestRoundData();
 
         if (answer <= 0) revert OracleInvalidPrice();
@@ -27,16 +27,12 @@ contract ChainlinkPriceFeedReader {
         return (uint256(answer), timestamp);
     }
 
+    function read() external view returns (uint256 price, uint256 updatedAt) {
+        return _fetchRaw();
+    }
+
     function readNormalizedTo1e18() external view returns (uint256 price1e18, uint256 updatedAt) {
-        (uint80 roundId, int256 answer,, uint256 timestamp, uint80 answeredInRound) = FEED.latestRoundData();
-
-        if (answer <= 0) revert OracleInvalidPrice();
-        if (timestamp == 0) revert OracleIncompleteRound();
-        if (answeredInRound < roundId) revert OracleIncompleteRound();
-
-        // casting to uint256 is safe because answer > 0 was checked above
-        // forge-lint: disable-next-line(unsafe-typecast)
-        uint256 raw = uint256(answer);
+        (uint256 raw, uint256 timestamp) = _fetchRaw();
 
         if (FEED_DECIMALS == 18) {
             return (raw, timestamp);

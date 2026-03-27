@@ -23,7 +23,7 @@ library OracleGuard {
         return (diff * 10_000) / oldPrice;
     }
 
-    function validateDevotion(uint256 oldPrice, uint256 newPrice, uint256 maxDeviationBps) internal pure {
+    function validateDeviation(uint256 oldPrice, uint256 newPrice, uint256 maxDeviationBps) internal pure {
         uint256 dev = deviationBps(oldPrice, newPrice);
 
         if (dev > maxDeviationBps) {
