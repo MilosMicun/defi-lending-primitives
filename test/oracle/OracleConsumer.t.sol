@@ -2,11 +2,10 @@
 pragma solidity ^0.8.24;
 
 import {Test} from "forge-std/Test.sol";
-
-import {OracleConsumer} from "../../src/oracle/OracleConsumer.sol";
-import {ChainlinkPriceFeedReader} from "../../src/oracle/ChainlinkPriceFeedReader.sol";
+import {OracleConsumer} from "../../src/oracle/chainlink/OracleConsumer.sol";
+import {ChainlinkPriceFeedReader} from "../../src/oracle/chainlink/ChainlinkPriceFeedReader.sol";
 import {MockOracle} from "./mocks/MockOracle.sol";
-import {OracleGuard} from "../../src/oracle/OracleGuard.sol";
+import {OracleGuard} from "../../src/oracle/chainlink/OracleGuard.sol";
 
 contract OracleConsumerTest is Test {
     OracleConsumer internal consumer;
