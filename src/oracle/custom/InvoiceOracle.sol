@@ -69,6 +69,16 @@ contract InvoiceOracle {
         DISPUTE_WINDOW = disputeWindow_;
     }
 
+    function setSubmitter(address account, bool allowed) external onlyOwner {
+        if (account == address(0)) revert ZeroAddress();
+        isSubmitter[account] = allowed;
+    }
+
+    function setChallenger(address account, bool allowed) external onlyOwner {
+        if (account == address(0)) revert ZeroAddress();
+        isChallenger[account] = allowed;
+    }
+
     function submit(bytes32 invoiceId, uint256 value) external onlySubmitter {
         if (value == 0) revert InvalidValue();
 
