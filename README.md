@@ -1,272 +1,441 @@
 # DeFi Lending Primitives
 
-This module explores oracle design patterns and price formation mechanisms for DeFi lending protocols.
+This repository explores core building blocks behind DeFi lending protocols:
 
-From external price feeds to custom validation systems for illiquid assets — and finally to how price actually emerges from liquidity.
+- oracle design  
+- price formation  
+- and reward distribution mechanics  
 
----
-
-## Components
-
-### ChainlinkPriceFeedReader  
-Reads oracle data and performs basic validation.
-
-### OracleGuard  
-Validates price safety (staleness, deviation).
-
-### OracleConsumer  
-Demonstrates safe usage of oracle data in a protocol context.
-
-### InvoiceOracle  
-Custom oracle for illiquid real-world assets using dispute-based validation.
-
-### SimpleAMM  
-Minimal constant product AMM (x * y = k) used to simulate price formation, slippage, and oracle manipulation.
+The goal is not just implementation, but understanding **how trust, pricing, and incentives are engineered at protocol level**.
 
 ---
 
-## Key Concepts
+## Architecture Overview
 
-- Price normalization (1e18)
-- Staleness protection
-- Oracle safety layers
-- Dispute-based validation
-- Time-dependent state machines
-- Price as a function of liquidity
-- Slippage and price impact
-- TWAP (Time-Weighted Average Price)
+This repository is structured around independent protocol modules:
+
+- Oracle Systems → bringing external data on-chain safely  
+- AMM Mechanics → understanding how price emerges from liquidity  
+- Reward Systems → distributing value over time  
+
+Each module is designed to reflect **real production patterns used in DeFi protocols**.
 
 ---
 
-## Day 68 — Oracle Consumer Refactor
+## Modules
 
-Refactored oracle consumption into a stateful model.
+---
 
-### Approach
+### Oracle Systems
 
-Instead of trusting oracle data on every read, the protocol:
+#### Chainlink Integration
 
-- validates external data once  
-- stores a safe version in state  
-- uses only previously accepted values  
+- `ChainlinkPriceFeedReader`
+- `OracleGuard`
+- `OracleConsumer`
 
-### Implementation
+Implements a layered oracle architecture:
 
-- `updatePrice()` — validates and accepts new oracle price  
-- `getPrice()` — returns last accepted price  
+1. Read external data  
+2. Validate safety conditions  
+3. Store trusted values  
+4. Expose safe price to protocol  
 
-### Improvements
+---
 
-- Separated write (oracle update) from read (price usage)  
-- Introduced `lastAcceptedPrice` as a stable reference  
-- Prevented invalid updates from affecting protocol state  
-- Enforced invariant: failed updates must not modify accepted price  
+#### Problem
 
-### Test Coverage
+External data is:
 
-- stale price  
-- deviation limits (upward, downward, boundary)  
-- negative price  
-- incomplete oracle round  
-- uninitialized state  
+- unreliable  
+- delayed  
+- manipulable  
 
-### Insight
+Blindly trusting oracle feeds introduces systemic risk.
+
+---
+
+#### Solution
+
+Instead of using oracle data directly:
+
+- validate once  
+- store accepted value  
+- reuse trusted state  
+
+---
+
+#### Implementation
+
+- `updatePrice()` → validates and stores price  
+- `getPrice()` → returns last accepted value  
+
+---
+
+#### Safety Mechanisms
+
+- staleness check  
+- deviation threshold  
+- invalid round detection  
+- no state update on failure  
+
+---
+
+#### Key Insight
+
 
 External data is untrusted.
 
-Protocols should **validate once, store, and reuse safe values**.
+Protocols must validate → store → reuse.
+
 
 ---
 
-## Day 69 — Custom Oracle Design (RWA)
+### Custom Oracle (RWA)
 
-Designed a custom oracle for illiquid real-world assets where no price feed exists.
+- `InvoiceOracle`
 
-### Problem
+Designed for illiquid real-world assets:
 
-Traditional oracle systems assume:
+- invoices  
+- receivables  
+- private debt  
 
-- continuous market pricing  
-- external data availability  
+These assets:
 
-RWA assets (invoices, receivables, private debt) do not satisfy these assumptions.
+- do not have market prices  
+- cannot rely on price feeds  
 
-### Approach
+---
 
-Instead of price feeds:
+#### Approach
+
+Instead of fetching price:
 
 - submit value  
 - allow dispute  
 - finalize if uncontested  
 
-This shifts oracle design from data ingestion to **state validation**.
+---
+
+#### State Machine
+
+
+NO STATE
+↓
+SUBMITTED
+↓
+├── FINALIZED
+└── DISPUTED → CANCELLED
+
 
 ---
 
-### Architecture
+#### Properties
 
-`InvoiceOracle` implements a dispute-based validation model:
-
-- `submit()` — authorized submitter proposes value  
-- `dispute()` — challenger can contest within dispute window  
-- `finalize()` — value becomes final if not disputed  
-- `cancelDisputedSubmission()` — disputed submissions are removed  
-
-Each `invoiceId` represents an independent state machine.
-
----
-
-### State Machine
-
-NO STATE  
-↓  
-SUBMITTED (active)  
-↓  
-├──→ FINALIZED  
-└──→ DISPUTED → CANCELLED  
-
----
-
-### Properties
-
-- mutually exclusive terminal states  
 - no overwrite of active submissions  
-- no finalize after dispute  
-- strict dispute window enforcement  
-- full state cleanup after terminal transitions  
+- mutually exclusive terminal states  
+- strict dispute window  
+- full cleanup after resolution  
 
 ---
 
-### Access Control
+#### Roles
 
-- `submitter` — proposes values  
-- `challenger` — disputes values  
-- `owner` — manages roles and resolves disputes  
-
-Enforces separation of responsibilities in adversarial environments.
+- submitter → proposes value  
+- challenger → disputes value  
+- owner → manages permissions  
 
 ---
 
-### Test Coverage
+#### Key Insight
 
-22 tests covering:
 
-- full state machine transitions  
-- role-based access control  
-- invalid input and invalid state transitions  
-- dispute window boundary conditions  
-- event emission verification  
-- storage cleanup correctness  
-- isolation across multiple `invoiceId` values  
+Oracle ≠ data feed
+
+Oracle = state machine + incentives + time
+
 
 ---
 
-### Insight
+### AMM & Price Formation
 
-Not all oracles are data feeds.
+- `SimpleAMM`
 
-For illiquid assets, oracle design becomes:
+Implements constant product invariant:
 
-→ value assertion  
-→ challenge mechanism  
-→ time-based resolution  
 
-Security emerges from **roles, time, and state transitions**, not external data sources.
+x * y = k
+
 
 ---
 
-## Day 70 — AMM Price Formation & TWAP
+#### Core Mechanics
 
-Implemented a minimal constant product AMM to understand how price is formed and why spot price is unsafe for lending.
-
----
-
-### Problem
-
-Lending protocols rely on price.
-
-But AMM price:
-
-- is not external truth  
-- is derived from liquidity  
-- can be manipulated within a single block  
+- price = reserve ratio  
+- trades move price along curve  
+- liquidity defines price  
+- no external reference required  
 
 ---
 
-### Approach
+#### Slippage
 
-Build a simplified AMM:
-
-- invariant: `x * y = k`  
-- price derived from reserve ratio  
-- simulate swaps and price impact  
-- accumulate price over time (`price * time`)  
+- small trades → minimal impact  
+- large trades → worse execution price  
 
 ---
 
-### Implementation
+#### Price Impact
 
-`SimpleAMM` includes:
 
-- reserve-based pricing  
-- `swap0For1` / `swap1For0`  
-- invariant-preserving trade logic  
-- cumulative price tracking  
-- TWAP building blocks  
+bigger trade → bigger deviation from spot
+
 
 ---
 
-### Core Mechanics
+#### TWAP (Time-Weighted Average Price)
 
-- Price = `reserve1 / reserve0`  
-- Trades move price along a curve  
-- Larger trades cause worse execution price  
-- No fixed price — only a liquidity curve  
-
----
-
-### TWAP Design
-
-Instead of trusting spot:
+Instead of trusting spot price:
 
 - accumulate `price * time`  
-- compute average over a window  
+- compute average  
 
-TWAP formula:
 
 TWAP = (cumulativeEnd - cumulativeStart) / timeElapsed
 
----
-
-### Test Coverage
-
-- spot price derivation  
-- price movement after swaps  
-- slippage comparison (small vs large trades)  
-- cumulative price accumulation  
-- TWAP vs spot under manipulation  
 
 ---
 
-### Key Insight
+#### Key Insight
 
-AMM price is **not trustworthy by default**.
 
-- spot price → cheap to manipulate  
-- TWAP → requires sustained manipulation over time  
+AMM price is not truth.
 
-Security is not about reading price.
+It is a function of liquidity and can be manipulated.
 
-It is about understanding **how expensive it is to fake it**.
+
+---
+
+### Staking & Reward Distribution
+
+- `StakingRewards`
+
+Implements time-based reward distribution using **cumulative index accounting** (Synthetix model).
+
+---
+
+## Problem
+
+Tracking rewards per user directly leads to:
+
+- complex state updates  
+- unfair distribution  
+- high gas costs  
+
+Users:
+
+- enter at different times  
+- leave at different times  
+- change balances dynamically  
+
+---
+
+## Solution
+
+Use a **global cumulative index**:
+
+
+rewardPerToken
+
+
+Instead of tracking rewards per user continuously.
+
+---
+
+## Core Model
+
+### Global Accounting
+
+
+rewardPerToken = cumulative reward per token
+
+
+---
+
+### User Accounting
+
+
+earned(user) =
+stored rewards
+
+balance * (currentIndex - userCheckpoint)
+
+---
+
+### Interpretation
+
+- system tracks total reward globally  
+- users track only their checkpoint  
+- rewards are derived, not stored continuously  
+
+---
+
+## Key Variables
+
+- `rewardRate` → tokens per second  
+- `rewardPerToken` → global index  
+- `userRewardPerTokenPaid` → checkpoint  
+- `rewards[user]` → stored reward  
+
+---
+
+## Accounting Engine
+
+### `_updateReward(account)`
+
+Core function responsible for:
+
+1. Updating global state  
+2. Updating user state (if needed)  
+
+---
+
+### Behavior
+
+- always updates global index  
+- updates user only if `account != address(0)`  
+
+---
+
+## Critical Properties
+
+- no historical rewards for new users  
+- rewards proportional to stake  
+- checkpoint before balance changes  
+- reward accumulation is linear in time  
+- safe when `totalSupply == 0`  
+
+---
+
+## Fairness Guarantees
+
+### New User
+
+- starts from current index  
+- receives no past rewards  
+
+---
+
+### Existing User
+
+- accumulates reward continuously  
+- unaffected by new entrants  
+
+---
+
+### Withdraw
+
+- rewards are checkpointed before balance change  
+- no loss of earned rewards  
+
+---
+
+### Claim
+
+- rewards transferred  
+- internal state reset  
+- no double claiming  
+
+---
+
+## Example (Intuition)
+
+### Scenario
+
+- Alice stakes first  
+- time passes  
+- Bob joins later  
+
+---
+
+### Result
+
+- Alice earns full early rewards  
+- later rewards are shared proportionally  
+
+---
+
+### Key Mechanism
+
+
+rewardPerToken grows globally
+users only track delta since their checkpoint
+
+
+---
+
+## Key Insight
+
+
+Rewards are not tracked per user.
+
+They are tracked globally and distributed via an index.
+
+
+---
+
+## Key Concepts
+
+- Oracle safety layers  
+- Time-based state machines  
+- Liquidity-driven pricing  
+- Slippage and manipulation cost  
+- TWAP vs spot  
+- Global vs local accounting  
+- Checkpoint-based reward systems  
+
+---
+
+## Design Principles
+
+- separate read vs write logic  
+- minimize trust in external data  
+- encode invariants in state  
+- prefer deterministic accounting  
+- avoid implicit assumptions  
 
 ---
 
 ## Summary
 
-This module demonstrates three layers of price design:
+This repository demonstrates how DeFi protocols handle:
 
-- Day 68 → **validate external data before using it**  
-- Day 69 → **design a system when external data does not exist**  
-- Day 70 → **understand how price emerges and how it can be manipulated**  
+### 1. External Truth
+Validate and safely integrate off-chain data.
 
-Together, they show that oracle design is not just integration — it is **protocol-level engineering of trust and cost of manipulation**.
+### 2. Missing Data
+Design systems when price feeds do not exist.
+
+### 3. Market Dynamics
+Understand how price emerges and can be manipulated.
+
+### 4. Incentives
+Distribute value fairly over time.
+
+---
+
+## Final Insight
+
+DeFi protocols are not just smart contracts.
+
+They are:
+
+- state machines  
+- accounting systems  
+- adversarial environments  
+
+Correctness emerges from:
+
+
+math + state + time
