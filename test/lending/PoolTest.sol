@@ -348,4 +348,65 @@ contract PoolTest is Test {
         assertEq(pool.totalCollateral(), depositAmount - expectedSeize);
         assertEq(collateralToken.balanceOf(liquidator), collateralBefore + expectedSeize);
     }
+
+    function test_liquidate_reverts_when_position_is_healthy() public {
+        uint256 depositAmount = 1000e18;
+        uint256 borrowAmount = 500e18;
+
+        vm.startPrank(user);
+        collateralToken.approve(address(pool), depositAmount);
+        pool.deposit(depositAmount);
+        pool.borrow(borrowAmount);
+        vm.stopPrank();
+
+        assertFalse(pool.isLiquidatable(user));
+
+        uint256 repayAmount = 100e18;
+
+        debtToken.mint(liquidator, repayAmount);
+
+        vm.startPrank(liquidator);
+        debtToken.approve(address(pool), repayAmount);
+
+        vm.expectRevert(Pool.PositionNotLiquidatable.selector);
+        pool.liquidate(user, repayAmount);
+        vm.stopPrank();
+    }
+
+    function test_liquidate_reverts_when_collateral_insufficient() public {
+        uint256 depositAmount = 1000e18;
+        uint256 borrowAmount = 700e18;
+        uint256 repayAmount = 200e18;
+
+        vm.startPrank(user);
+        collateralToken.approve(address(pool), depositAmount);
+        pool.deposit(depositAmount);
+        pool.borrow(borrowAmount);
+        vm.stopPrank();
+
+        // Force the position into an unhealthy state by reducing collateral directly in storage
+        // This simulates a price drop or external shock in a simplified model
+        vm.store(
+            address(pool),
+            keccak256(abi.encode(user, uint256(5))), // collateralBalanceOf slot
+            bytes32(uint256(100e18)) // drastically reduced collateral
+        );
+
+        // Confirm the position is now liquidatable
+        assertTrue(pool.isLiquidatable(user));
+
+        // Calculate expected seize:
+        // seize = repayAmount * (1 + liquidationBonus)
+        // = 200 * 1.10 = 220
+        // Since user only has 100 collateral, liquidation should fail
+        debtToken.mint(liquidator, repayAmount);
+
+        vm.startPrank(liquidator);
+        debtToken.approve(address(pool), repayAmount);
+
+        // Expect revert because there is not enough collateral to cover seize amount
+        vm.expectRevert(Pool.InsufficientCollateral.selector);
+        pool.liquidate(user, repayAmount);
+        vm.stopPrank();
+    }
 }
