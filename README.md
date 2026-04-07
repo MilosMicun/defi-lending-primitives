@@ -1,10 +1,12 @@
 # DeFi Lending Primitives
 
-This repository explores core building blocks behind DeFi lending protocols:
+A collection of core building blocks behind DeFi lending protocols.
 
+Focus:
 - oracle design  
 - price formation  
-- and reward distribution mechanics  
+- lending mechanics  
+- reward distribution  
 
 The goal is not just implementation, but understanding **how trust, pricing, and incentives are engineered at protocol level**.
 
@@ -12,13 +14,20 @@ The goal is not just implementation, but understanding **how trust, pricing, and
 
 ## Architecture Overview
 
-This repository is structured around independent protocol modules:
+This repository is structured as independent protocol modules.
 
-- Oracle Systems → bringing external data on-chain safely  
-- AMM Mechanics → understanding how price emerges from liquidity  
-- Reward Systems → distributing value over time  
+Each module reflects a real production pattern used in DeFi:
 
-Each module is designed to reflect **real production patterns used in DeFi protocols**.
+- **Oracle Systems** → bringing external data on-chain safely  
+- **AMM Mechanics** → understanding how price emerges from liquidity  
+- **Reward Systems** → distributing value over time  
+- **Lending Primitives** → collateral, debt, liquidation, and pricing  
+
+Each module includes:
+
+- Solidity implementation  
+- focused documentation  
+- tests covering edge cases and invariants  
 
 ---
 
@@ -28,18 +37,11 @@ Each module is designed to reflect **real production patterns used in DeFi proto
 
 ### Oracle Systems
 
-#### Chainlink Integration
+#### Components
 
-- `ChainlinkPriceFeedReader`
-- `OracleGuard`
-- `OracleConsumer`
-
-Implements a layered oracle architecture:
-
-1. Read external data  
-2. Validate safety conditions  
-3. Store trusted values  
-4. Expose safe price to protocol  
+- [`ChainlinkPriceFeedReader`](src/oracle/ChainlinkPriceFeedReader.sol)  
+- [`OracleGuard`](src/oracle/OracleGuard.sol)  
+- [`OracleConsumer`](src/oracle/OracleConsumer.sol)  
 
 ---
 
@@ -74,26 +76,28 @@ Instead of using oracle data directly:
 
 #### Safety Mechanisms
 
-- staleness check  
-- deviation threshold  
-- invalid round detection  
+- staleness checks  
+- deviation limits  
+- incomplete round validation  
 - no state update on failure  
 
 ---
 
 #### Key Insight
 
-
 External data is untrusted.
 
 Protocols must validate → store → reuse.
-
 
 ---
 
 ### Custom Oracle (RWA)
 
-- `InvoiceOracle`
+#### Component
+
+- [`InvoiceOracle`](src/oracle/custom/InvoiceOracle.sol)
+
+---
 
 Designed for illiquid real-world assets:
 
@@ -150,17 +154,19 @@ SUBMITTED
 
 #### Key Insight
 
-
 Oracle ≠ data feed
 
 Oracle = state machine + incentives + time
-
 
 ---
 
 ### AMM & Price Formation
 
-- `SimpleAMM`
+#### Component
+
+- [`SimpleAMM`](src/amm/SimpleAMM.sol)
+
+---
 
 Implements constant product invariant:
 
@@ -209,23 +215,25 @@ TWAP = (cumulativeEnd - cumulativeStart) / timeElapsed
 
 #### Key Insight
 
-
 AMM price is not truth.
 
 It is a function of liquidity and can be manipulated.
-
 
 ---
 
 ### Staking & Reward Distribution
 
-- `StakingRewards`
+#### Component
+
+- [`StakingRewards`](src/staking/StakingRewards.sol)
+
+---
 
 Implements time-based reward distribution using **cumulative index accounting** (Synthetix model).
 
 ---
 
-## Problem
+#### Problem
 
 Tracking rewards per user directly leads to:
 
@@ -233,155 +241,111 @@ Tracking rewards per user directly leads to:
 - unfair distribution  
 - high gas costs  
 
-Users:
-
-- enter at different times  
-- leave at different times  
-- change balances dynamically  
-
 ---
 
-## Solution
+#### Solution
 
-Use a **global cumulative index**:
+Use a global cumulative index:
 
 
 rewardPerToken
 
 
-Instead of tracking rewards per user continuously.
-
 ---
 
-## Core Model
-
-### Global Accounting
-
-
-rewardPerToken = cumulative reward per token
-
-
----
-
-### User Accounting
+#### Core Model
 
 
 earned(user) =
-stored rewards
-
+stored rewards +
 balance * (currentIndex - userCheckpoint)
 
----
-
-### Interpretation
-
-- system tracks total reward globally  
-- users track only their checkpoint  
-- rewards are derived, not stored continuously  
 
 ---
 
-## Key Variables
-
-- `rewardRate` → tokens per second  
-- `rewardPerToken` → global index  
-- `userRewardPerTokenPaid` → checkpoint  
-- `rewards[user]` → stored reward  
-
----
-
-## Accounting Engine
-
-### `_updateReward(account)`
-
-Core function responsible for:
-
-1. Updating global state  
-2. Updating user state (if needed)  
-
----
-
-### Behavior
-
-- always updates global index  
-- updates user only if `account != address(0)`  
-
----
-
-## Critical Properties
+#### Key Properties
 
 - no historical rewards for new users  
 - rewards proportional to stake  
 - checkpoint before balance changes  
-- reward accumulation is linear in time  
 - safe when `totalSupply == 0`  
 
 ---
 
-## Fairness Guarantees
-
-### New User
-
-- starts from current index  
-- receives no past rewards  
-
----
-
-### Existing User
-
-- accumulates reward continuously  
-- unaffected by new entrants  
-
----
-
-### Withdraw
-
-- rewards are checkpointed before balance change  
-- no loss of earned rewards  
-
----
-
-### Claim
-
-- rewards transferred  
-- internal state reset  
-- no double claiming  
-
----
-
-## Example (Intuition)
-
-### Scenario
-
-- Alice stakes first  
-- time passes  
-- Bob joins later  
-
----
-
-### Result
-
-- Alice earns full early rewards  
-- later rewards are shared proportionally  
-
----
-
-### Key Mechanism
-
-
-rewardPerToken grows globally
-users only track delta since their checkpoint
-
-
----
-
-## Key Insight
-
+#### Key Insight
 
 Rewards are not tracked per user.
 
 They are tracked globally and distributed via an index.
 
+---
+
+### Lending Primitives
+
+Core components of a lending protocol:
+
+- collateral management  
+- borrowing constraints  
+- liquidation logic  
+- dynamic pricing of capital  
+
+---
+
+#### Components
+
+- [`Pool.sol`](src/lending/Pool.sol)  
+- [`InterestRateModel.sol`](src/lending/InterestRateModel.sol)  
+
+---
+
+#### Liquidation Mechanics
+
+- [`docs/liquidation-mechanics.md`](docs/liquidation-mechanics.md)
+
+Defines how unhealthy positions are closed to maintain solvency.
+
+Key concepts:
+
+- health factor  
+- liquidation threshold  
+- liquidation bonus  
+- bad debt prevention  
+
+---
+
+#### Interest Rate Model
+
+- [`docs/interest-rate-models.md`](docs/interest-rate-models.md)
+
+Implements utilization-based pricing of capital using a two-slope (kink) model.
+
+
+U = borrows / (cash + borrows)
+
+borrowAPR = f(U)
+
+
+Before kink → gradual increase  
+After kink → aggressive increase  
+
+---
+
+#### System Behavior
+
+
+utilization ↑
+→ borrow APR ↑
+→ borrow ↓ + repay ↑ + supply ↑
+→ utilization ↓
+
+
+---
+
+#### Key Insight
+
+Interest rate is not yield.
+
+It is a control mechanism that stabilizes liquidity through user behavior.
 
 ---
 
@@ -394,6 +358,7 @@ They are tracked globally and distributed via an index.
 - TWAP vs spot  
 - Global vs local accounting  
 - Checkpoint-based reward systems  
+- Utilization-driven interest rates  
 
 ---
 
@@ -411,17 +376,20 @@ They are tracked globally and distributed via an index.
 
 This repository demonstrates how DeFi protocols handle:
 
-### 1. External Truth
-Validate and safely integrate off-chain data.
+### External Truth  
+Safely integrating off-chain data.
 
-### 2. Missing Data
-Design systems when price feeds do not exist.
+### Missing Data  
+Designing systems without reliable price feeds.
 
-### 3. Market Dynamics
-Understand how price emerges and can be manipulated.
+### Market Dynamics  
+Understanding how price emerges and can be manipulated.
 
-### 4. Incentives
-Distribute value fairly over time.
+### Incentives  
+Distributing value over time.
+
+### Liquidity  
+Pricing capital dynamically to maintain system balance.
 
 ---
 
