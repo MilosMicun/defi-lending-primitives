@@ -12,6 +12,22 @@ The goal is not just implementation, but understanding **how trust, pricing, and
 
 ---
 
+## Scope
+
+This repository is not a production lending protocol.
+
+It is a focused study of the core mechanics that make lending protocols work.
+
+Each module isolates one critical system and explains:
+
+- why it exists  
+- how it fails  
+- how it is designed safely  
+
+The production implementation will live in a separate repository (`defi-lending-protocol`).
+
+---
+
 ## Architecture Overview
 
 This repository is structured as independent protocol modules.
@@ -28,6 +44,31 @@ Each module includes:
 - Solidity implementation  
 - focused documentation  
 - tests covering edge cases and invariants  
+
+---
+
+### Repository Structure
+
+
+src/
+├── oracle/
+│ ├── ChainlinkPriceFeedReader.sol
+│ ├── OracleGuard.sol
+│ └── custom/
+│ └── InvoiceOracle.sol
+├── amm/
+│ └── SimpleAMM.sol
+├── staking/
+│ └── StakingRewards.sol
+└── lending/
+├── Pool.sol
+└── InterestRateModel.sol
+
+docs/
+├── liquidation-mechanics.md
+├── interest-rate-models.md
+└── oracle-risk-in-lending-protocols.md
+
 
 ---
 
@@ -124,14 +165,12 @@ Instead of fetching price:
 
 #### State Machine
 
-
-NO STATE
-↓
-SUBMITTED
-↓
-├── FINALIZED
-└── DISPUTED → CANCELLED
-
+NO STATE  
+↓  
+SUBMITTED  
+↓  
+├── FINALIZED  
+└── DISPUTED → CANCELLED  
 
 ---
 
@@ -170,9 +209,7 @@ Oracle = state machine + incentives + time
 
 Implements constant product invariant:
 
-
 x * y = k
-
 
 ---
 
@@ -194,9 +231,7 @@ x * y = k
 
 #### Price Impact
 
-
 bigger trade → bigger deviation from spot
-
 
 ---
 
@@ -207,9 +242,7 @@ Instead of trusting spot price:
 - accumulate `price * time`  
 - compute average  
 
-
 TWAP = (cumulativeEnd - cumulativeStart) / timeElapsed
-
 
 ---
 
@@ -247,19 +280,15 @@ Tracking rewards per user directly leads to:
 
 Use a global cumulative index:
 
-
 rewardPerToken
-
 
 ---
 
 #### Core Model
 
-
 earned(user) =
 stored rewards +
 balance * (currentIndex - userCheckpoint)
-
 
 ---
 
@@ -319,25 +348,37 @@ Key concepts:
 
 Implements utilization-based pricing of capital using a two-slope (kink) model.
 
-
 U = borrows / (cash + borrows)
 
 borrowAPR = f(U)
-
 
 Before kink → gradual increase  
 After kink → aggressive increase  
 
 ---
 
+#### Oracle Risk in Lending Protocols
+
+- [`docs/oracle-risk-in-lending-protocols.md`](docs/oracle-risk-in-lending-protocols.md)
+
+Covers how oracle failure modes directly affect lending protocol solvency.
+
+Key concepts:
+
+- stale data and undercollateralized debt  
+- spot price manipulation  
+- bad collateral valuation  
+- RWA-specific latency risk  
+- TWAP vs spot tradeoffs  
+
+---
+
 #### System Behavior
 
-
-utilization ↑
-→ borrow APR ↑
-→ borrow ↓ + repay ↑ + supply ↑
-→ utilization ↓
-
+utilization ↑  
+→ borrow APR ↑  
+→ borrow ↓ + repay ↑ + supply ↑  
+→ utilization ↓  
 
 ---
 
@@ -404,6 +445,5 @@ They are:
 - adversarial environments  
 
 Correctness emerges from:
-
 
 math + state + time
