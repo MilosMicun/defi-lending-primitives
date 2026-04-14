@@ -1,449 +1,313 @@
-# DeFi Lending Primitives
+# Milos Mirkovic
 
-A collection of core building blocks behind DeFi lending protocols.
-
-Focus:
-- oracle design  
-- price formation  
-- lending mechanics  
-- reward distribution  
-
-The goal is not just implementation, but understanding **how trust, pricing, and incentives are engineered at protocol level**.
+Solidity / Smart Contract Engineer ⚙️  
+Protocol Engineering: DeFi Systems, Risk, and On-Chain Interaction
 
 ---
 
-## Scope
-
-This repository is not a production lending protocol.
-
-It is a focused study of the core mechanics that make lending protocols work.
-
-Each module isolates one critical system and explains:
-
-- why it exists  
-- how it fails  
-- how it is designed safely  
-
-The production implementation will live in a separate repository (`defi-lending-protocol`).
+> ⚠️ This is a protocol engineering repository — not a tutorial.  
+> Focus: building and understanding the core systems behind DeFi lending, including risk, pricing, and on-chain interaction.
 
 ---
 
-## Architecture Overview
+## Background
 
-This repository is structured as independent protocol modules.
+Most DeFi developers learn trade finance from whitepapers.
 
-Each module reflects a real production pattern used in DeFi:
+I ran it.
 
-- **Oracle Systems** → bringing external data on-chain safely  
-- **AMM Mechanics** → understanding how price emerges from liquidity  
-- **Reward Systems** → distributing value over time  
-- **Lending Primitives** → collateral, debt, liquidation, and pricing  
+8 years operating a business that dealt with invoicing, receivables, buyer credit risk, and factoring — before writing a single line of Solidity.
 
-Each module includes:
-
-- Solidity implementation  
-- focused documentation  
-- tests covering edge cases and invariants  
+This repository is the technical foundation for what comes next: a production RWA invoice financing protocol built by someone who understands the financial reality behind the contracts.
 
 ---
 
-### Repository Structure
+## Positioning
 
+This repository reflects a specific focus:
 
-src/
-├── oracle/
-│ ├── ChainlinkPriceFeedReader.sol
-│ ├── OracleGuard.sol
-│ └── custom/
-│ └── InvoiceOracle.sol
-├── amm/
-│ └── SimpleAMM.sol
-├── staking/
-│ └── StakingRewards.sol
-└── lending/
-├── Pool.sol
-└── InterestRateModel.sol
+- designing protocol primitives  
+- understanding financial risk at system level  
+- building on-chain interaction tooling  
 
-docs/
-├── liquidation-mechanics.md
-├── interest-rate-models.md
-└── oracle-risk-in-lending-protocols.md
-
+Not just writing contracts — but understanding how protocols behave in production.
 
 ---
 
-## Modules
+## What This Repo Is
+
+**defi-lending-primitives** is a protocol engineering project focused on breaking down DeFi lending into fundamental components.
+
+This is not a full protocol.
+
+It is a structured implementation of the systems that make lending protocols work:
+
+- pricing (AMM, oracles)  
+- risk (liquidations, oracle failure)  
+- incentives (interest rates, staking)  
+- on-chain interaction (reads, writes, events)  
+
+Each component is implemented, tested, and analyzed in isolation.
 
 ---
 
-### Oracle Systems
+## System Overview
 
-#### Components
+The project is organized into three layers:
 
-- [`ChainlinkPriceFeedReader`](src/oracle/ChainlinkPriceFeedReader.sol)  
-- [`OracleGuard`](src/oracle/OracleGuard.sol)  
-- [`OracleConsumer`](src/oracle/OracleConsumer.sol)  
+### 1. Solidity Primitives (`src/`)
 
----
+Core protocol components:
 
-#### Problem
-
-External data is:
-
-- unreliable  
-- delayed  
-- manipulable  
-
-Blindly trusting oracle feeds introduces systemic risk.
+- oracle systems (Chainlink + custom RWA oracle)  
+- AMM (price formation)  
+- staking rewards (index-based accounting)  
+- lending pool (collateral, borrow, liquidation)  
+- interest rate model (utilization-based pricing)  
 
 ---
 
-#### Solution
+### 2. Protocol Reasoning (`docs/`)
 
-Instead of using oracle data directly:
+Each system is explained through:
 
-- validate once  
-- store accepted value  
-- reuse trusted state  
-
----
-
-#### Implementation
-
-- `updatePrice()` → validates and stores price  
-- `getPrice()` → returns last accepted value  
+- invariants  
+- failure modes  
+- financial meaning of state transitions  
 
 ---
 
-#### Safety Mechanisms
+### 3. On-Chain Interaction Layer (`script/`) 🔥
 
-- staleness checks  
-- deviation limits  
-- incomplete round validation  
-- no state update on failure  
+JavaScript tooling for real protocol interaction:
+
+- reading chain state (balances, blocks, protocol data)  
+- multicall aggregation  
+- sending transactions  
+- transaction lifecycle tracking  
+- receipt parsing  
+- event decoding  
+- historical log queries  
+- live event listeners  
+
+This reflects how backend systems interact with protocols in production.
 
 ---
 
-#### Key Insight
+## System Flow
 
-External data is untrusted.
+```
+User deposits collateral
+↓
+Collateral value (via oracle)
+↓
+Borrow capacity calculated
+↓
+User borrows asset
+↓
+Health factor monitored
 
-Protocols must validate → store → reuse.
+If price drops ↓
+
+Health factor < 1
+↓
+Liquidation triggered
+↓
+Collateral sold with bonus
+↓
+Protocol remains solvent
+```
 
 ---
+
+## Core Concepts Implemented
+
+### Oracle Safety
+- stale data protection  
+- deviation guards  
+- validated price storage  
+- failure-aware consumption  
 
 ### Custom Oracle (RWA)
-
-#### Component
-
-- [`InvoiceOracle`](src/oracle/custom/InvoiceOracle.sol)
-
----
-
-Designed for illiquid real-world assets:
-
-- invoices  
-- receivables  
-- private debt  
-
-These assets:
-
-- do not have market prices  
-- cannot rely on price feeds  
-
----
-
-#### Approach
-
-Instead of fetching price:
-
-- submit value  
-- allow dispute  
-- finalize if uncontested  
-
----
-
-#### State Machine
-
-NO STATE  
-↓  
-SUBMITTED  
-↓  
-├── FINALIZED  
-└── DISPUTED → CANCELLED  
-
----
-
-#### Properties
-
-- no overwrite of active submissions  
-- mutually exclusive terminal states  
-- strict dispute window  
-- full cleanup after resolution  
-
----
-
-#### Roles
-
-- submitter → proposes value  
-- challenger → disputes value  
-- owner → manages permissions  
-
----
-
-#### Key Insight
-
-Oracle ≠ data feed
-
-Oracle = state machine + incentives + time
-
----
-
-### AMM & Price Formation
-
-#### Component
-
-- [`SimpleAMM`](src/amm/SimpleAMM.sol)
-
----
-
-Implements constant product invariant:
-
-x * y = k
-
----
-
-#### Core Mechanics
-
-- price = reserve ratio  
-- trades move price along curve  
-- liquidity defines price  
-- no external reference required  
-
----
-
-#### Slippage
-
-- small trades → minimal impact  
-- large trades → worse execution price  
-
----
-
-#### Price Impact
-
-bigger trade → bigger deviation from spot
-
----
-
-#### TWAP (Time-Weighted Average Price)
-
-Instead of trusting spot price:
-
-- accumulate `price * time`  
-- compute average  
-
-TWAP = (cumulativeEnd - cumulativeStart) / timeElapsed
-
----
-
-#### Key Insight
-
-AMM price is not truth.
-
-It is a function of liquidity and can be manipulated.
-
----
-
-### Staking & Reward Distribution
-
-#### Component
-
-- [`StakingRewards`](src/staking/StakingRewards.sol)
-
----
-
-Implements time-based reward distribution using **cumulative index accounting** (Synthetix model).
-
----
-
-#### Problem
-
-Tracking rewards per user directly leads to:
-
-- complex state updates  
-- unfair distribution  
-- high gas costs  
-
----
-
-#### Solution
-
-Use a global cumulative index:
-
-rewardPerToken
-
----
-
-#### Core Model
-
-earned(user) =
-stored rewards +
-balance * (currentIndex - userCheckpoint)
-
----
-
-#### Key Properties
-
-- no historical rewards for new users  
-- rewards proportional to stake  
-- checkpoint before balance changes  
-- safe when `totalSupply == 0`  
-
----
-
-#### Key Insight
-
-Rewards are not tracked per user.
-
-They are tracked globally and distributed via an index.
-
----
-
-### Lending Primitives
-
-Core components of a lending protocol:
-
-- collateral management  
-- borrowing constraints  
-- liquidation logic  
-- dynamic pricing of capital  
-
----
-
-#### Components
-
-- [`Pool.sol`](src/lending/Pool.sol)  
-- [`InterestRateModel.sol`](src/lending/InterestRateModel.sol)  
-
----
-
-#### Liquidation Mechanics
-
-- [`docs/liquidation-mechanics.md`](docs/liquidation-mechanics.md)
-
-Defines how unhealthy positions are closed to maintain solvency.
-
-Key concepts:
-
+- submit → dispute → finalize state machine  
+- time-bound dispute window  
+- role-based system  
+
+### AMM & TWAP
+- constant product invariant (x * y = k)  
+- price impact and slippage  
+- TWAP as manipulation resistance  
+
+### Staking Rewards
+- rewardPerToken model  
+- cumulative index accounting  
+- fair time-based distribution  
+
+### Lending Model
+- collateral vs debt accounting  
+- borrow limits  
+- solvency constraints  
+
+### Liquidations
 - health factor  
-- liquidation threshold  
-- liquidation bonus  
+- liquidation threshold & bonus  
 - bad debt prevention  
 
----
+### Interest Rate Model
+- utilization-based pricing  
+- two-slope (kink) model  
+- liquidity control mechanism  
 
-#### Interest Rate Model
-
-- [`docs/interest-rate-models.md`](docs/interest-rate-models.md)
-
-Implements utilization-based pricing of capital using a two-slope (kink) model.
-
-U = borrows / (cash + borrows)
-
-borrowAPR = f(U)
-
-Before kink → gradual increase  
-After kink → aggressive increase  
+### Aave v3 Mapping
+- Pool / aToken / debt token architecture  
+- full lifecycle: deposit → borrow → repay → liquidate  
 
 ---
 
-#### Oracle Risk in Lending Protocols
+## On-Chain Interaction
 
-- [`docs/oracle-risk-in-lending-protocols.md`](docs/oracle-risk-in-lending-protocols.md)
+### Backend Flow
 
-Covers how oracle failure modes directly affect lending protocol solvency.
-
-Key concepts:
-
-- stale data and undercollateralized debt  
-- spot price manipulation  
-- bad collateral valuation  
-- RWA-specific latency risk  
-- TWAP vs spot tradeoffs  
-
----
-
-#### System Behavior
-
-utilization ↑  
-→ borrow APR ↑  
-→ borrow ↓ + repay ↑ + supply ↑  
-→ utilization ↓  
+```
+read state (multicall)
+→ send transaction
+→ wait for confirmation
+→ parse receipt
+→ decode events
+→ monitor via listeners
+```
 
 ---
 
-#### Key Insight
+## Example: Event Decoding
 
-Interest rate is not yield.
+```js
+const receipt = await tx.wait();
 
-It is a control mechanism that stabilizes liquidity through user behavior.
+for (const log of receipt.logs) {
+  try {
+    const parsed = iface.parseLog(log);
 
----
+    if (parsed.name === "Transfer") {
+      console.log({
+        from: parsed.args.from,
+        to: parsed.args.to,
+        value: parsed.args.value.toString()
+      });
+    }
 
-## Key Concepts
-
-- Oracle safety layers  
-- Time-based state machines  
-- Liquidity-driven pricing  
-- Slippage and manipulation cost  
-- TWAP vs spot  
-- Global vs local accounting  
-- Checkpoint-based reward systems  
-- Utilization-driven interest rates  
-
----
-
-## Design Principles
-
-- separate read vs write logic  
-- minimize trust in external data  
-- encode invariants in state  
-- prefer deterministic accounting  
-- avoid implicit assumptions  
+  } catch (e) {
+    // ignore non-matching logs
+  }
+}
+```
 
 ---
 
-## Summary
+## Failure Scenario: Oracle Mispricing → Insolvency
 
-This repository demonstrates how DeFi protocols handle:
+A lending protocol can be fully correct at the code level and still fail due to incorrect pricing.
 
-### External Truth  
-Safely integrating off-chain data.
+```
+Collateral real value: $100
+Oracle reports: $150 (stale or manipulated)
 
-### Missing Data  
-Designing systems without reliable price feeds.
+User borrows against inflated value:
+→ borrows $120
 
-### Market Dynamics  
-Understanding how price emerges and can be manipulated.
+Market corrects price to $100:
+→ position becomes undercollateralized
 
-### Incentives  
-Distributing value over time.
+If liquidation is delayed or insufficient:
+→ protocol absorbs bad debt
+→ system becomes insolvent
+```
 
-### Liquidity  
-Pricing capital dynamically to maintain system balance.
+Key insight:
+
+- protocols depend on external truth  
+- incorrect pricing breaks all internal guarantees  
+- oracle safety is not a feature — it is a system dependency  
+- liquidation is only effective if pricing is correct  
 
 ---
 
-## Final Insight
+## Project Structure
 
-DeFi protocols are not just smart contracts.
+```
+src/
+  ├── oracle/
+  ├── amm/
+  ├── staking/
+  └── lending/
 
-They are:
+test/
+  ├── oracle/
+  ├── amm/
+  ├── staking/
+  └── lending/
 
-- state machines  
-- accounting systems  
-- adversarial environments  
+docs/
+  ├── liquidation-mechanics.md
+  ├── interest-rate-models.md
+  ├── oracle-risk-in-lending-protocols.md
+  ├── tx-lifecycle-and-receipt-analysis.md
+  └── aave-v3-architecture-mapping.md
 
-Correctness emerges from:
+script/
+  ├── contractStateReader.js
+  ├── writeAndDecode.js
+  ├── analyzeBorrowReceipt.js
+  ├── readTransferEvents.js
+  ├── listenTransferEvents.js
+  └── mint.js
+```
 
-math + state + time
+---
+
+## What This Demonstrates
+
+- Ability to design DeFi protocol primitives  
+- Understanding of financial risk in smart contracts  
+- Strong grasp of oracle failure modes  
+- Experience with transaction lifecycle and event systems  
+- Ability to read and interact with live blockchain state  
+- Mapping production protocols (Aave v3) into implementable models  
+
+---
+
+## Tech Stack
+
+- Solidity (0.8.x)  
+- Foundry  
+- Ethers.js v6  
+- Node.js  
+
+---
+
+## How to Run
+
+```bash
+forge build
+forge test
+```
+
+Run scripts:
+
+```bash
+node script/contractStateReader.js
+node script/writeAndDecode.js
+```
+
+---
+
+## What Comes Next
+
+This repository is the foundation.
+
+The production work lives in two separate repositories:
+
+- **defi-lending-protocol** — full lending protocol: collateral vault, borrow engine, liquidation, interest accrual, invariant tests  
+- **rwa-invoice-financing** — RWA invoice financing protocol: invoice NFT registry, senior/junior tranches, custom oracle adapter, settlement logic, self-audit  
+
+Both built from the primitives developed here.
